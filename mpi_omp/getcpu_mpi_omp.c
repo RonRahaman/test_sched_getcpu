@@ -7,7 +7,7 @@
 #include <assert.h>
 
 int main(int argc,  char **argv) {
-  int stat, n_procs, my_rank, my_cpu, name_len;
+  int stat, n_procs, my_rank, name_len;
   char *name;
 
   MPI_Init(&argc, &argv);
@@ -22,15 +22,26 @@ int main(int argc,  char **argv) {
   stat = MPI_Get_processor_name(name, &name_len);
   assert(stat == MPI_SUCCESS);
 
-  my_cpu = sched_getcpu();
 
   for (int i=0; i<n_procs; i++) {
     if (my_rank == i) {
-      printf("rank %2d,  node '%s',  cpu %2d\n", my_rank, name, my_cpu);
+#pragma omp parallel default(none) shared(name, my_rank, stdout)
+      {
+        int my_thread = omp_get_thread_num();
+        int n_threads = omp_get_num_threads();
+        int my_cpu = sched_getcpu();
+        for (int j=0; j<n_threads; j++) {
+          if (my_thread == j) {
+            printf("node '%s', rank %2d, thread %2d, cpu %2d\n", name, my_rank, my_thread, my_cpu);
+            fflush(stdout);
+          }
+#pragma omp barrier
+        }
+      }
       fflush(stdout);
     }
     MPI_Barrier(MPI_COMM_WORLD);
   }
-  
+
   MPI_Finalize();
 }
